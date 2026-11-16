@@ -9,18 +9,18 @@
     "node": "^22.13.0 || >=23.5.0"
   },
   "scripts": {
+    "dev:maplibre": "pnpm build && pnpm --filter voxel-maplibre-example dev",
+    "test": "pnpm build && node --test packages/*/tests/*.test.mjs",
+    "test:browser": "pnpm build && node tests/browser.mjs",
     "build": "tsc --build",
     "watch": "tsc --build --watch",
     "clean": "tsc --build --clean",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "check": "pnpm lint && pnpm build",
-    "test": "pnpm build && node --test packages/*/tests/*.test.mjs",
-    "test:browser": "pnpm build && node tests/browser.mjs"
+    "check": "pnpm lint && pnpm build"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
-    "typescript": "7.0.2",
     "@deck.gl/core": "9.3.12",
     "@luma.gl/core": "9.3.5",
     "@luma.gl/engine": "9.3.5",
@@ -28,6 +28,7 @@
     "deck.gl-voxel": "workspace:*",
     "playwright": "1.65.0",
     "pngjs": "7.0.0",
+    "typescript": "7.0.2",
     "vite": "8.3.7"
   }
 }

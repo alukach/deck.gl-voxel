@@ -6,6 +6,9 @@
     },
     {
       "path": "./packages/deck.gl-voxel-zarr"
+    },
+    {
+      "path": "./examples/maplibre"
     }
   ]
 }
