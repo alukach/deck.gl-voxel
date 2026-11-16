@@ -1,6 +1,7 @@
 import type { Vector3, VoxelData } from 'deck.gl-voxel';
 import { type Chunk, FetchStore, get, open, root, withRangeCoalescing } from 'zarrita';
 
+import { hasGeoZarrMetadata, readGeoZarrField, readSpatialAttributes } from './geo-zarr-volume.js';
 import { createProjectedGrid, projectFrame } from './projected-grid.js';
 
 /** Labels for the stored array's dimensions. */
@@ -28,13 +29,34 @@ export interface ZarrVolumeLayout {
   readonly crs?: 'EPSG:4326';
 }
 
-/** Selects a Zarr array and describes its grid. */
+/** Selects a Zarr array or a GeoZarr field. */
 export interface ZarrVolumeOptions {
-  /** Path to the array inside the store. Use '.' for the root. */
+  /** Path to the array or GeoZarr field inside the store. Use '.' for the root. */
   readonly field: string;
 
-  /** Grid geometry for the array. */
-  readonly layout: ZarrVolumeLayout;
+  /**
+   * Grid geometry for plain Zarr. Supply it when GeoZarr metadata doesn't describe the grid.
+   */
+  readonly layout?: ZarrVolumeLayout;
+
+  /**
+   * Path to the resolution level inside the GeoZarr field. Each level is a copy of the
+   * same field with a different cell size, like the detail levels of a map tile pyramid.
+   * @default The coarsest declared level
+   */
+  readonly level?: string;
+
+  /** Name of the GeoZarr vertical dimension. Required for GeoZarr. */
+  readonly verticalDimension?: string;
+
+  /** Path inside the store to an array of evenly spaced cell heights or depths, in meters. */
+  readonly verticalCoordinates?: string;
+
+  /**
+   * Set to 'up' for heights that grow upward or 'down' for depths that grow downward.
+   * @default 'up'
+   */
+  readonly verticalPositive?: 'up' | 'down';
 
   /**
    * Maximum number of cells in one frame. Zarr stores data in blocks called chunks.
@@ -52,6 +74,9 @@ export interface ZarrVolume {
   /** Number of frames. An array with no time axis has one frame. */
   readonly frameCount: number;
 
+  /** Selected level path relative to the field, or '.' when the field is an array. */
+  readonly level: string;
+
   /**
    * Reads the whole grid for one time step. The returned array stores one X row after
    * another, then one XY plane after another along Z. Map grids use deck.gl's Web Mercator
@@ -68,13 +93,15 @@ const DEFAULT_MAX_CELLS = 2_000_000;
 
 /**
  * Opens a float32 volume from a Zarr v2 or v3 store. This reads metadata and any needed
- * coordinates. Call readFrame to fetch the data values.
+ * coordinates. Call readFrame to fetch the data values. GeoZarr metadata can tell us
+ * where the grid sits on a map. With plain Zarr, put that information in layout.
  *
  * @param url - HTTP(S) store root. Cross-origin reads require CORS.
  * @param options - Field, grid geometry and frame size limit.
  * @returns A reader that fetches the stored blocks needed for each requested frame.
  * @throws {Error} If the field, geometry, or selected frame size is unsupported.
  * @see https://zarr-specs.readthedocs.io/en/latest/v3/core/index.html
+ * @see https://geozarr.org/conventions.html
  */
 export async function openZarrVolume(url: string, options: ZarrVolumeOptions): Promise<ZarrVolume> {
   const { field, layout, signal } = options;
@@ -86,16 +113,42 @@ export async function openZarrVolume(url: string, options: ZarrVolumeOptions): P
 
   const location = root(withRangeCoalescing(new FetchStore(url, { useSuffixRequest: true })));
   const openOptions = signal ? { signal } : {};
-  const array = await open(location.resolve(field), { ...openOptions, kind: 'array' });
+  const node = await open(location.resolve(field), openOptions);
+  const attributes = await readSpatialAttributes(location, node, openOptions);
+  const isGeoZarr = hasGeoZarrMetadata(attributes);
 
-  if (!array.is('float32')) {
+  if (isGeoZarr && layout) {
+    throw new Error('GeoZarr supplies the grid layout. Remove the plain Zarr layout option.');
+  }
+
+  if (!isGeoZarr && (!layout || node.kind !== 'array')) {
+    throw new Error(
+      'Plain Zarr requires an array path and a layout with axes, origin, and spacing.',
+    );
+  }
+
+  if (!isGeoZarr && options.level !== undefined) {
+    throw new Error(
+      'Select a plain Zarr array directly with field. The level option is for GeoZarr.',
+    );
+  }
+
+  const geo = isGeoZarr ? await readGeoZarrField(node, attributes, options) : undefined;
+  const array = geo?.array ?? node;
+  const axes = geo?.axes ?? layout?.axes;
+
+  if (array.kind !== 'array' || !array.is('float32') || !axes) {
     throw new Error('Expected a float32 Zarr array.');
   }
 
-  const { axes } = layout;
   const { dimensions, frameCount } = getFrameShape(array.shape, axes, maxCells);
   const [width, height, depth] = dimensions;
-  const grid = preparePlainGrid(layout, dimensions);
+
+  if (geo && (width !== geo.level.arrayWidth || height !== geo.level.arrayHeight)) {
+    throw new Error('GeoZarr spatial shape does not match the selected array.');
+  }
+
+  const grid = geo ? await geo.createGrid(depth) : layout && preparePlainGrid(layout, dimensions);
   const scalar = array;
   const fillValue = scalar.attrs._FillValue;
   const noDataValue = typeof fillValue === 'number' ? Math.fround(fillValue) : undefined;
@@ -106,6 +159,7 @@ export async function openZarrVolume(url: string, options: ZarrVolumeOptions): P
 
   return {
     frameCount,
+    level: geo?.level.path ?? '.',
     /** {@inheritDoc ZarrVolume.readFrame} */
     async readFrame(index: number, frameSignal?: AbortSignal): Promise<VoxelData> {
       if (!Number.isSafeInteger(index) || index < 0 || index >= frameCount) {
@@ -139,12 +193,40 @@ export async function openZarrVolume(url: string, options: ZarrVolumeOptions): P
       return {
         values: copyToGridOrder(normalized, dimensions),
         dimensions,
-        origin: layout.origin,
-        spacing: layout.spacing,
+        ...(layout && { origin: layout.origin, spacing: layout.spacing }),
         ...(noDataValue !== undefined && { noDataValue }),
       };
     },
   };
+}
+
+/** Options for the original GeoZarr-only entry point. */
+export interface GeoZarrVolumeOptions extends ZarrVolumeOptions {
+  /** Name of the vertical dimension on the array. */
+  readonly verticalDimension: string;
+
+  /** Store-relative path to the vertical coordinate array. */
+  readonly verticalCoordinates: string;
+
+  /** GeoZarr supplies the grid layout. */
+  readonly layout?: never;
+}
+
+/** Return type of the original GeoZarr-only entry point. */
+export type GeoZarrVolume = ZarrVolume;
+
+/**
+ * Opens a GeoZarr field through the shared reader.
+ * @param url - HTTP(S) Zarr store root.
+ * @param options - Field, overview, and vertical coordinates.
+ * @returns A reader that fetches frames on demand.
+ * @see {@link openZarrVolume}
+ */
+export function openGeoZarrVolume(
+  url: string,
+  options: GeoZarrVolumeOptions,
+): Promise<GeoZarrVolume> {
+  return openZarrVolume(url, options);
 }
 
 /**

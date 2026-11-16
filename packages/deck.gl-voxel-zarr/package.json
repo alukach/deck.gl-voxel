@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "deck.gl-voxel": "workspace:*",
+    "@developmentseed/geozarr": "0.10.0",
     "@math.gl/web-mercator": "4.1.0",
     "zarrita": "0.7.5"
   }
