@@ -21,6 +21,19 @@ body {
   pointer-events: none;
 }
 
+#tooltip {
+  position: fixed;
+  z-index: 2;
+  max-width: calc(100% - 1rem);
+  box-sizing: border-box;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #aaa;
+  background: #fff;
+  color: #333;
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
 .controls {
   position: absolute;
   z-index: 3;

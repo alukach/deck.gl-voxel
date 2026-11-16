@@ -6,6 +6,7 @@ import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from 'maplibre-gl
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { datasets } from './datasets.js';
 import { FrameCache } from './frame-cache.js';
+import { pickVolumeSample } from './volume-hover.js';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 
@@ -93,6 +94,7 @@ async function start(): Promise<void> {
   const exaggerationValue = getElement('exaggeration-value', HTMLOutputElement);
   const time = getElement('time', HTMLOutputElement);
   const panel = getElement('controls', HTMLElement);
+  const tooltip = getElement('tooltip', HTMLDivElement);
 
   if (!('gpu' in navigator)) {
     throw new Error('Open this example in a browser with WebGPU enabled.');
@@ -170,13 +172,69 @@ async function start(): Promise<void> {
     }
   }
 
+  /** Dismisses the current sample readout. */
+  function hideTooltip(): void {
+    tooltip.hidden = true;
+  }
+
   /** Synchronizes the two canvases when the map camera or viewport changes. */
   function syncCamera(): void {
+    hideTooltip();
     deck.setProps({ viewState: getViewState(map) });
   }
 
   map.on('move', syncCamera);
   map.on('resize', syncCamera);
+  map.on('mouseout', hideTooltip);
+  map.on('mousedown', hideTooltip);
+  map.on('mousemove', ({ point, originalEvent }) => {
+    if (
+      !frame ||
+      modePicker.value === 'isosurface' ||
+      !deck.isInitialized ||
+      originalEvent.buttons ||
+      map.isMoving()
+    ) {
+      hideTooltip();
+      return;
+    }
+
+    const viewport = deck.getViewports()[0];
+
+    if (!viewport) {
+      return;
+    }
+
+    const sample = pickVolumeSample(
+      frame,
+      viewport,
+      [point.x, point.y],
+      modelMatrix,
+      dataset.transferFunction,
+      dataset.valueRange,
+      density.valueAsNumber,
+    );
+
+    if (!sample) {
+      hideTooltip();
+      return;
+    }
+
+    tooltip.textContent = `${dataset.valueLabel} ${dataset.formatValue(sample.value)} · ${(sample.altitudeMeters / 1000).toFixed(1)} km altitude`;
+    tooltip.hidden = false;
+    tooltip.style.left = `${Math.max(8, Math.min(point.x + 12, window.innerWidth - tooltip.offsetWidth - 8))}px`;
+    tooltip.style.top = `${Math.max(8, Math.min(point.y + 12, window.innerHeight - tooltip.offsetHeight - 8))}px`;
+  });
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'Escape') {
+        hideTooltip();
+      }
+    },
+    listenerOptions,
+  );
+
   window.addEventListener(
     'pagehide',
     (event) => {
@@ -253,6 +311,7 @@ async function start(): Promise<void> {
     credit.textContent = next.credit;
     source.href = next.source;
     setStatus('loading');
+    hideTooltip();
     deck.setProps({ layers: [] });
     map.jumpTo({ center: next.center, zoom: next.zoom, ...MAP_ANGLE });
 
@@ -372,6 +431,7 @@ async function start(): Promise<void> {
         }),
       ],
     });
+    hideTooltip();
   }
 
   /**
