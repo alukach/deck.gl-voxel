@@ -14,7 +14,8 @@
     "clean": "tsc --build --clean",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "check": "pnpm lint && pnpm build"
+    "check": "pnpm lint && pnpm build",
+    "test": "pnpm build && node --test packages/*/tests/*.test.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
