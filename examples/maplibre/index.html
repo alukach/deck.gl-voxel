@@ -12,6 +12,13 @@
       <canvas id="volume" aria-label="Hurricane volume"></canvas>
       <section id="controls" class="controls" data-state="loading" aria-labelledby="title">
         <h1 id="title">Hurricane volumes</h1>
+        <div class="select-control">
+          <label for="dataset">Dataset</label>
+          <select id="dataset">
+            <option value="helene">Hurricane Helene (ERA5)</option>
+            <option value="milton">Hurricane Milton (NOAA GFS)</option>
+          </select>
+        </div>
         <p id="description">ERA5 cloud cover · September 2024</p>
         <div class="select-control">
           <label for="render-mode">Render mode</label>

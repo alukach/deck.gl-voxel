@@ -76,6 +76,7 @@ function showSliderValue(input: HTMLInputElement, output: HTMLOutputElement, lab
  */
 async function start(): Promise<void> {
   const canvas = getElement('volume', HTMLCanvasElement);
+  const datasetPicker = getElement('dataset', HTMLSelectElement);
   const modePicker = getElement('render-mode', HTMLSelectElement);
   const isovalueControl = getElement('isovalue-control', HTMLDivElement);
   const isovalue = getElement('isovalue', HTMLInputElement);
@@ -101,7 +102,7 @@ async function start(): Promise<void> {
 
   const lifetime = new AbortController();
   const listenerOptions = { signal: lifetime.signal };
-  const dataset = datasets.helene;
+  let dataset = datasets.helene;
   const map = new MapLibreMap({
     container: 'map',
     style: 'https://tiles.openfreemap.org/styles/positron',
@@ -222,7 +223,7 @@ async function start(): Promise<void> {
 
   /** Opens the selected dataset and loads its initial frame. */
   async function loadSelectedDataset(): Promise<void> {
-    const next = dataset;
+    const next = datasetPicker.value === 'milton' ? datasets.milton : datasets.helene;
     setPlaying(false);
     datasetRequest?.abort();
     frameRequest?.abort();
@@ -232,6 +233,7 @@ async function start(): Promise<void> {
     const request = new AbortController();
     const signal = requestSignal(request);
     datasetRequest = request;
+    dataset = next;
     setExaggeration(next.verticalExaggeration);
     setDensity(next.density);
     const [min, max] = next.valueRange;
@@ -487,6 +489,8 @@ async function start(): Promise<void> {
     },
     listenerOptions,
   );
+
+  datasetPicker.addEventListener('change', () => void loadSelectedDataset(), listenerOptions);
 
   await loadSelectedDataset();
 }

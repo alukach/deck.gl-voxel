@@ -60,9 +60,11 @@ interface Dataset {
 
 const HELENE_URL =
   'https://helene-voxel-329134478190-eu-central-1.s3.eu-central-1.amazonaws.com/era5-helene.zarr';
+const MILTON_RUN = Date.UTC(2024, 9, 8, 12);
+const MILTON_STEP_HOURS = 3;
 
 /** Volumes available in the dataset selector. */
-export const datasets: Record<'helene', Dataset> = {
+export const datasets: Record<'helene' | 'milton', Dataset> = {
   helene: {
     id: 'helene',
     description: 'ERA5 cloud cover · September 2024',
@@ -91,5 +93,31 @@ export const datasets: Record<'helene', Dataset> = {
     ]),
     valueLabel: 'Cloud cover',
     formatValue: (value) => `${(value * 100).toFixed(0)}%`,
+  },
+  milton: {
+    id: 'milton',
+    description: 'GFS wind speed · Run Oct 8, 12 UTC',
+    credit: 'NOAA NWS NCEP GFS data via Dynamical.org (CC BY 4.0).',
+    source: 'https://dynamical.org/catalog/noaa-gfs-forecast-virtual/',
+    open: async (signal) => {
+      const { openGfsWind } = await import('./gfs-wind.js');
+      return openGfsWind(MILTON_RUN, MILTON_STEP_HOURS, signal);
+    },
+    center: [-87, 25],
+    zoom: 5,
+    verticalExaggeration: 71,
+    density: 4,
+    firstTime: MILTON_RUN,
+    stepHours: MILTON_STEP_HOURS,
+    initialFrame: 0,
+    valueRange: [0, 60],
+    isovalueStep: 1,
+    colorBy: 'value',
+    transferFunction: new Uint8Array([
+      68, 1, 84, 0, 68, 57, 131, 0, 49, 104, 142, 1, 33, 145, 140, 9, 53, 183, 121, 32, 144, 215,
+      67, 70, 253, 231, 37, 120,
+    ]),
+    valueLabel: 'Wind speed',
+    formatValue: (value) => `${value.toFixed(1)} m/s`,
   },
 };
