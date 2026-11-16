@@ -1,11 +1,13 @@
 import type { LayerProps } from '@deck.gl/core';
 import type { Texture } from '@luma.gl/core';
 
+import type { VoxelLayer } from './voxel-layer.js';
+
 /** Three coordinates in X, Y, Z order. */
 export type Vector3 = readonly [number, number, number];
 
 /**
- * A 3D grid with one number per cell for the voxel layer.
+ * A 3D grid with one number per cell for {@link VoxelLayer}.
  * Pass a new grid object when the values or geometry change.
  * The origin is an outside corner. On each axis the first cell center is half a cell
  * in from that corner. The formula is `origin + (index + 0.5) * spacing`.
