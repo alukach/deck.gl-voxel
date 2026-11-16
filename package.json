@@ -1,0 +1,19 @@
+{
+  "name": "deck.gl-voxel-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Experimental deck.gl layer for visualizing volumetric data with WebGPU",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": "^22.13.0 || >=23.5.0"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.6",
+    "typescript": "7.0.2"
+  }
+}
