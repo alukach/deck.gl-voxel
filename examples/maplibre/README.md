@@ -1,6 +1,6 @@
 # MapLibre example
 
-The example draws a WebGPU `VoxelLayer` over a MapLibre basemap. Use the timeline to step through the data or press Play. Run the example with `pnpm dev:maplibre`.
+The example draws a WebGPU `VoxelLayer` over a MapLibre basemap. Use the timeline to step through the data or press Play. [Setup](../../README.md#run-the-example)
 
 ## Datasets
 
