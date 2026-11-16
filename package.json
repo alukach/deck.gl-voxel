@@ -9,8 +9,12 @@
     "node": "^22.13.0 || >=23.5.0"
   },
   "scripts": {
+    "build": "tsc --build",
+    "watch": "tsc --build --watch",
+    "clean": "tsc --build --clean",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "check": "pnpm lint && pnpm build"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
