@@ -130,6 +130,13 @@ export type VoxelLayerProps = LayerProps & {
   density?: number;
 
   /**
+   * Draw the full grid's bounding box, even when clipBounds shows only part of the grid.
+   * Rear edges are dashed and drawn beneath the volume. Front edges are solid.
+   * @default false
+   */
+  showBounds?: boolean;
+
+  /**
    * Box to keep, in [minX, minY, minZ, maxX, maxY, maxZ] order.
    * These are fractions of the grid size along each axis. Zero is the starting edge,
    * 0.5 is halfway across and 1 is the far edge. For example, setting maxZ to 0.5

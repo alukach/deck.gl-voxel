@@ -37,4 +37,7 @@ const deck = new Deck({
 - `volume` shows the grid’s interior (increase `density` to make it less transparent)
 - `isosurface` draws a surface where the data reaches `isovalue`
 
+Set `showBounds: true` to draw the full grid’s bounding box. The rear edges are dashed
+and appear behind the voxels. The outline is off by default.
+
 See the [layer props](src/types.ts) and the [MapLibre example](../../examples/maplibre/README.md).

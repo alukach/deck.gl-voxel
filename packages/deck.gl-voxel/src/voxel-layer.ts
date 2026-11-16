@@ -9,12 +9,17 @@ import {
   validateVolume,
 } from './volume.js';
 import {
+  createVoxelBounds,
+  destroyVoxelBounds,
+  type VoxelBoundsResources,
+} from './voxel-bounds.js';
+import {
   createVoxelResources,
   destroyVoxelResources,
   updateTransferTexture,
   type VoxelResources,
 } from './voxel-resources.js';
-import { createVoxelUniforms } from './voxel-uniforms.js';
+import { BOUNDS_OFFSETS, createVoxelUniforms } from './voxel-uniforms.js';
 
 /**
  * Blend the volume over what's already drawn. The shader has already multiplied its RGB by alpha.
@@ -27,6 +32,7 @@ const defaultProps: DefaultProps<VoxelLayerProps> = {
   stepSize: 0.5,
   maxSteps: 2048,
   density: 1,
+  showBounds: false,
   sampling: 'linear',
   colorBy: 'value',
   renderMode: 'volume',
@@ -68,7 +74,11 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
   static override defaultProps = defaultProps;
 
   /** A failed update keeps the layer hidden until its resources match the current props. */
-  declare state: { resources: VoxelResources | null; ready: boolean };
+  declare state: {
+    resources: VoxelResources | null;
+    bounds: VoxelBoundsResources | null;
+    ready: boolean;
+  };
 
   /**
    * Sets up the layer without allocating textures until the grid is validated.
@@ -80,7 +90,7 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
       throw new Error('VoxelLayer requires a WebGPU device.');
     }
 
-    this.setState({ resources: null, ready: false });
+    this.setState({ resources: null, bounds: null, ready: false });
     this.getAttributeManager()?.remove(['instancePickingColors']);
   }
 
@@ -88,17 +98,25 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
   override setShaderModuleProps(): void {}
 
   /**
-   * Gives deck.gl the draw model so it can update render settings and schedule redraws.
+   * Gives deck.gl the draw models so it can update render settings and schedule redraws.
    *
-   * @returns The current draw model, or an empty array before allocation.
+   * @returns The current draw models, or an empty array before allocation.
    */
   override getModels(): Model[] {
-    return this.state?.resources ? [this.state.resources.model] : [];
+    const resources = this.state?.resources;
+    const bounds = this.state?.bounds;
+
+    if (!resources) {
+      return [];
+    }
+
+    return bounds ? [resources.model, bounds.model] : [resources.model];
   }
 
   /**
    * Checks the options and uploads the grid or color ramp when the corresponding object changes.
    * Frees the old grid texture before uploading a replacement to save GPU memory.
+   * Keeps the bounds model across frames and releases it when the outline is turned off.
    * @param update - Current layer props from the deck.gl lifecycle.
    * @throws {Error} If validation, allocation, or upload fails.
    */
@@ -127,11 +145,19 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
       updateTransferTexture(device, this.state.resources, transferFunction, props.id);
     }
 
+    if (props.showBounds && !this.state.bounds) {
+      this.setState({ bounds: createVoxelBounds(device, props.id) });
+    } else if (!props.showBounds && this.state.bounds) {
+      this.releaseBounds();
+    }
+
     this.setState({ ready: true });
   }
 
   /**
    * Sends this view's settings to the GPU and draws into the canvas via deck.gl's render pass.
+   * Draws the dashed rear edges first so the volume can cover them, then draws the solid
+   * front edges over the volume.
    *
    * @param options - Draw parameters supplied by deck.gl.
    * @param options.renderPass - Where the draw commands go. deck.gl finishes the pass
@@ -175,9 +201,24 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
       Boolean(depth),
     );
 
-    resources.uniforms.write(uniforms);
+    const bounds = this.state.bounds;
+
+    if (bounds && uniforms.bounds) {
+      bounds.front.write(uniforms.bounds);
+      uniforms.bounds[BOUNDS_OFFSETS.rearPass] = 1;
+      bounds.rear.write(uniforms.bounds);
+      bounds.model.setBindings({ outline: bounds.rear });
+      bounds.model.draw(renderPass);
+    }
+
+    resources.uniforms.write(uniforms.volume);
     resources.model.setBindings({ sceneDepth: depth ?? resources.emptyDepth });
     resources.model.draw(renderPass);
+
+    if (bounds && uniforms.bounds) {
+      bounds.model.setBindings({ outline: bounds.front });
+      bounds.model.draw(renderPass);
+    }
   }
 
   /**
@@ -186,8 +227,19 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
    * @param context - Framework context passed to the base layer cleanup.
    */
   override finalizeState(context: LayerContext): void {
+    this.releaseBounds();
     this.releaseResources();
     super.finalizeState(context);
+  }
+
+  /** Drops the bounds model reference before freeing its GPU objects. */
+  private releaseBounds(): void {
+    const bounds = this.state.bounds;
+    this.state.bounds = null;
+
+    if (bounds) {
+      destroyVoxelBounds(bounds);
+    }
   }
 
   /** Drops the model reference before destroying it so deck.gl won't try to free it again. */

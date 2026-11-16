@@ -428,6 +428,7 @@ async function start(): Promise<void> {
           transferFunction: dataset.transferFunction,
           opacityUnitDistance: Math.abs(volume.spacing?.[2] ?? 1),
           density: density.valueAsNumber,
+          showBounds: true,
         }),
       ],
     });

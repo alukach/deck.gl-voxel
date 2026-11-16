@@ -32,6 +32,18 @@ const RENDER_MODES = { volume: 0, isosurface: 1 } as const;
 /** Buffer size in bytes for three 64-byte matrices and eight 16-byte groups. Includes padding. */
 export const VOXEL_UNIFORM_BYTES = (3 * 16 + 8 * 4) * Float32Array.BYTES_PER_ELEMENT;
 
+/** Float32 offsets for the fields in OutlineUniforms in WGSL. */
+export const BOUNDS_OFFSETS = {
+  volumeToClip: 0,
+  camera: 16,
+  rearPass: 20,
+  pixelRatio: 21,
+  viewportSize: 22,
+} as const;
+
+/** Buffer size in bytes for a matrix, a four-number camera and four draw settings. */
+export const BOUNDS_UNIFORM_BYTES = (16 + 4 + 4) * Float32Array.BYTES_PER_ELEMENT;
+
 /**
  * Writes camera, sampling and style settings into the array the shader reads.
  * The camera applies two steps. The view matrix makes positions relative to the camera.
@@ -42,13 +54,15 @@ export const VOXEL_UNIFORM_BYTES = (3 * 16 + 8 * 4) * Float32Array.BYTES_PER_ELE
  * For lighting, invert the volume-to-view matrix and swap its rows and columns
  * (the inverse transpose). This keeps the surface normal perpendicular to the surface
  * even when the grid or display is stretched more along one axis than another.
+ * The outline uses the same projection as the volume, in the forward direction.
+ * Its camera setting holds either a point (w = 1) or a direction (w = 0) in grid coordinates.
  *
  * @param props - Validated layer options.
  * @param viewport - Active deck.gl viewport.
  * @param canvasSize - Width and height of the canvas's drawing buffer, in actual pixels it draws.
  * @param pixelRatio - Drawing pixels per CSS pixel. At 2, a 400 CSS-pixel view draws 800 pixels across.
  * @param hasDepth - Whether a texture with the depth of opaque objects is available to the shader.
- * @returns Settings in the order and padding expected by VoxelUniforms in WGSL.
+ * @returns Volume settings and, when enabled, wireframe settings for the same transform.
  * @throws {Error} If the camera transform can't be inverted or the settings overflow float32.
  * @see https://pbr-book.org/4ed/Geometry_and_Transformations/Applying_Transformations#Normals
  */
@@ -58,7 +72,7 @@ export function createVoxelUniforms(
   canvasSize: readonly [number, number],
   pixelRatio: number,
   hasDepth: boolean,
-): Float32Array {
+): { volume: Float32Array; bounds: Float32Array | undefined } {
   const values = new Float32Array(VOXEL_UNIFORM_BYTES / Float32Array.BYTES_PER_ELEMENT);
   const spacing = props.volume.spacing ?? [1, 1, 1];
   const clip = props.clipBounds ?? [0, 0, 0, 1, 1, 1];
@@ -74,9 +88,29 @@ export function createVoxelUniforms(
     throw new Error('Voxel transform must be finite and invertible.');
   }
 
+  const viewToVolume = volumeToView.clone().invert();
+  let bounds: Float32Array | undefined;
+
+  if (props.showBounds) {
+    bounds = new Float32Array(BOUNDS_UNIFORM_BYTES / Float32Array.BYTES_PER_ELEMENT);
+    bounds.set(volumeToClip, BOUNDS_OFFSETS.volumeToClip);
+    // Perspective projects with clip w = -view z. Orthographic projection keeps w = 1.
+    const perspective = viewport.projectionMatrix[15] === 0;
+    const camera = perspective
+      ? viewToVolume.transformAsPoint([0, 0, 0])
+      : viewToVolume.transformAsVector([0, 0, 1]);
+
+    bounds.set([...camera, perspective ? 1 : 0], BOUNDS_OFFSETS.camera);
+    bounds[BOUNDS_OFFSETS.pixelRatio] = pixelRatio;
+    bounds.set(
+      [viewport.width * pixelRatio, viewport.height * pixelRatio],
+      BOUNDS_OFFSETS.viewportSize,
+    );
+  }
+
   values.set(volumeToClip.invert(), OFFSETS.clipToVolume);
   values.set(volumeToView, OFFSETS.volumeToView);
-  values.set(volumeToView.clone().invert().transpose(), OFFSETS.normalToView);
+  values.set(viewToVolume.transpose(), OFFSETS.normalToView);
   values.set(
     [
       viewport.x * pixelRatio,
@@ -110,11 +144,11 @@ export function createVoxelUniforms(
     OFFSETS.renderMode,
   );
 
-  if (!values.every(Number.isFinite)) {
+  if (!values.every(Number.isFinite) || (bounds && !bounds.every(Number.isFinite))) {
     throw new Error('Voxel camera and style uniforms must be representable as float32.');
   }
 
-  return values;
+  return { volume: values, bounds };
 }
 
 /**
