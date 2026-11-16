@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "WebGPU scalar-volume rendering for deck.gl",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
   "files": [

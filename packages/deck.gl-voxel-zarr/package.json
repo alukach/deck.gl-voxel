@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Zarr and GeoZarr input adapter for deck.gl-voxel",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
   "files": [
