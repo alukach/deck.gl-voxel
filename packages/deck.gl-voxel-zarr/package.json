@@ -19,6 +19,8 @@
     }
   },
   "dependencies": {
-    "deck.gl-voxel": "workspace:*"
+    "deck.gl-voxel": "workspace:*",
+    "@math.gl/web-mercator": "4.1.0",
+    "zarrita": "0.7.5"
   }
 }
