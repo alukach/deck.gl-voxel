@@ -30,6 +30,12 @@ importers:
         specifier: 4.1.0
         version: 4.1.0
 
+  packages/deck.gl-voxel-zarr:
+    dependencies:
+      deck.gl-voxel:
+        specifier: workspace:*
+        version: link:../deck.gl-voxel
+
 packages:
 
   '@biomejs/biome@2.6.6':

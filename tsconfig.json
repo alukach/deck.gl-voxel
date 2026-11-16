@@ -3,6 +3,9 @@
   "references": [
     {
       "path": "./packages/deck.gl-voxel"
+    },
+    {
+      "path": "./packages/deck.gl-voxel-zarr"
     }
   ]
 }
