@@ -15,7 +15,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "check": "pnpm lint && pnpm build",
-    "test": "pnpm build && node --test packages/*/tests/*.test.mjs"
+    "test": "pnpm build && node --test packages/*/tests/*.test.mjs",
+    "test:browser": "pnpm build && node tests/browser.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
@@ -24,6 +25,9 @@
     "@luma.gl/core": "9.3.5",
     "@luma.gl/engine": "9.3.5",
     "@luma.gl/webgpu": "9.3.5",
-    "deck.gl-voxel": "workspace:*"
+    "deck.gl-voxel": "workspace:*",
+    "playwright": "1.65.0",
+    "pngjs": "7.0.0",
+    "vite": "8.3.7"
   }
 }
