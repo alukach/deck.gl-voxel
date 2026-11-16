@@ -11,6 +11,21 @@ importers:
       '@biomejs/biome':
         specifier: 2.6.6
         version: 2.6.6
+      '@deck.gl/core':
+        specifier: 9.3.12
+        version: 9.3.12
+      '@luma.gl/core':
+        specifier: 9.3.5
+        version: 9.3.5
+      '@luma.gl/engine':
+        specifier: 9.3.5
+        version: 9.3.5(@luma.gl/core@9.3.5)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.5))
+      '@luma.gl/webgpu':
+        specifier: 9.3.5
+        version: 9.3.5(@luma.gl/core@9.3.5)
+      deck.gl-voxel:
+        specifier: workspace:*
+        version: link:packages/deck.gl-voxel
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -150,6 +165,11 @@ packages:
 
   '@luma.gl/webgl@9.3.6':
     resolution: {integrity: sha512-tGm7FGWPmJKxGZMvkRPRi219x3tKmBxR7Uke09nTp2ujNak/O5V9xPIQ9lUBGTxqAb8U2yjKkXG8j+f/4b2+sw==}
+    peerDependencies:
+      '@luma.gl/core': ~9.3.0
+
+  '@luma.gl/webgpu@9.3.5':
+    resolution: {integrity: sha512-boBBjHTZ8thmwGo5YfmTQUPukY3r15tUp88v7Z2pmUQ5TrHQ+c7QXBj0WU9ipVclIzt7fTkQWCw2ueEWoVde/g==}
     peerDependencies:
       '@luma.gl/core': ~9.3.0
 
@@ -303,6 +323,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@webgpu/types@0.1.74':
+    resolution: {integrity: sha512-lgiI4hbuLcI9unnm2cL/tvCaQU45dp0xcLWJh5uB/9MBGvIA4F8XIk7nSiBeg+K4xWGYwgZKn80LmERI5CxoTA==}
+
   apache-arrow@21.2.0:
     resolution: {integrity: sha512-Hxe6Agq26gQOM954qpzYSllJBPJl+e16U5CkfuMUhLrNba+5nKkttIVlflaovN6oaTratqMGAO8H5u/aNhmHWQ==}
     hasBin: true
@@ -329,6 +352,9 @@ packages:
 
   undici-types@7.24.6:
     resolution: {integrity: sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==}
+
+  wgsl_reflect@1.6.0:
+    resolution: {integrity: sha512-p2bJTZXaS4/2L2NlvRIcnI6ZJJSF1kxvH5RYZzGw958Z2PDAw6Cl13cgbE9CWEqWZOFtnlCLXM9ZYdifnJ0FJg==}
 
 snapshots:
 
@@ -462,6 +488,13 @@ snapshots:
       '@math.gl/types': 4.1.0
       '@probe.gl/env': 4.1.2
 
+  '@luma.gl/webgpu@9.3.5(@luma.gl/core@9.3.5)':
+    dependencies:
+      '@luma.gl/core': 9.3.5
+      '@probe.gl/env': 4.1.2
+      '@webgpu/types': 0.1.74
+      wgsl_reflect: 1.6.0
+
   '@math.gl/core@4.1.0':
     dependencies:
       '@math.gl/types': 4.1.0
@@ -550,6 +583,8 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
+  '@webgpu/types@0.1.74': {}
+
   apache-arrow@21.2.0:
     dependencies:
       '@types/node': 25.9.9
@@ -591,3 +626,5 @@ snapshots:
       '@typescript/typescript-win32-x64': 7.0.2
 
   undici-types@7.24.6: {}
+
+  wgsl_reflect@1.6.0: {}

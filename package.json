@@ -19,6 +19,11 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "@deck.gl/core": "9.3.12",
+    "@luma.gl/core": "9.3.5",
+    "@luma.gl/engine": "9.3.5",
+    "@luma.gl/webgpu": "9.3.5",
+    "deck.gl-voxel": "workspace:*"
   }
 }
