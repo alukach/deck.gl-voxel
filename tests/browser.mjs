@@ -46,7 +46,7 @@ async function render(options = {}) {
     const { deck, VoxelLayer, OrbitView, MapView, ObstacleLayer, depth } = app;
     const dimensions = [16, 12, 8];
     let volume = {
-      values: new Float32Array(16 * 12 * 8).fill(0.5),
+      values: new Float32Array(16 * 12 * 8).fill(options.fill ?? 0.5),
       dimensions,
       origin: [-16, -12, -8],
       spacing: [2, 2, 2],
@@ -104,6 +104,13 @@ async function render(options = {}) {
     const layer = new VoxelLayer({
       id: 'test-volume',
       volume,
+      ...(options.nextFill !== undefined && {
+        volumeNext: {
+          ...volume,
+          values: new Float32Array(volume.values.length).fill(options.nextFill),
+        },
+        blend: options.blend,
+      }),
       renderMode: options.renderMode ?? 'volume',
       isovalue: options.isovalue ?? 0.5,
       transferFunction,
@@ -179,6 +186,19 @@ try {
   assert.ok(
     Math.abs(full[0] - bounded[0]) <= 2,
     'maximum iterations coarsens sampling without truncating the ray',
+  );
+
+  const midpoint = pixel(await render({ gradient: true, fill: 0.5 }));
+  const blended = pixel(await render({ gradient: true, fill: 0, nextFill: 1, blend: 0.5 }));
+
+  assert.ok(
+    blended.every((channel, index) => Math.abs(channel - midpoint[index]) <= 2),
+    `GPU blend of 0 and 1 at 0.5 matches a 0.5 grid: ${blended} vs ${midpoint}`,
+  );
+  assert.deepEqual(
+    pixel(await render({ gradient: true, fill: 0.5, nextFill: 1, blend: 0 })),
+    midpoint,
+    'blend 0 shows only the current grid',
   );
 
   const heightColors = await render({ gradient: true, colorBy: 'z' });

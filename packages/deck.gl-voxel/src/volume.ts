@@ -19,6 +19,7 @@ export const DEFAULT_TRANSFER_FUNCTION = createDefaultTransferFunction();
  * @param maxDimension - Largest cell count the GPU allows on any one texture axis.
  * @param maxBytes - GPU texture memory allowed for this layer, in bytes.
  * @param transferBytes - Size in bytes of the transferFunction typed array.
+ * @param volumeCount - How many grids of this size live on the GPU at once. Two while blending.
  * @throws {Error} If the grid is malformed or exceeds an allocation limit.
  */
 export function validateVolume(
@@ -26,6 +27,7 @@ export function validateVolume(
   maxDimension: number,
   maxBytes: number,
   transferBytes: number,
+  volumeCount = 1,
 ): void {
   if (!(volume?.values instanceof Float32Array)) {
     throw new Error('VoxelLayer requires Float32Array scalar values.');
@@ -62,12 +64,36 @@ export function validateVolume(
     throw new Error('Voxel extent exceeds float32 precision.');
   }
 
-  const textureBytes = cellCount * BYTES_PER_CELL + transferBytes + EMPTY_DEPTH_BYTES;
+  const textureBytes = cellCount * BYTES_PER_CELL * volumeCount + transferBytes + EMPTY_DEPTH_BYTES;
 
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || textureBytes > maxBytes) {
     throw new Error(
       `Voxel textures require ${textureBytes} bytes; maxTextureBytes is ${maxBytes}.`,
     );
+  }
+}
+
+/**
+ * Checks that the grid to fade toward can be blended with the current one.
+ *
+ * @param volume - Current grid, already validated.
+ * @param next - Grid to fade toward.
+ * @param maxDimension - Largest cell count the GPU allows on any one texture axis.
+ * @param maxBytes - GPU texture memory allowed for this layer, in bytes.
+ * @param transferBytes - Size in bytes of the transferFunction typed array.
+ * @throws {Error} If the grids differ in size or both together exceed an allocation limit.
+ */
+export function validateNextVolume(
+  volume: VoxelData,
+  next: VoxelData,
+  maxDimension: number,
+  maxBytes: number,
+  transferBytes: number,
+): void {
+  validateVolume(next, maxDimension, maxBytes, transferBytes, 2);
+
+  if (next.dimensions.some((size, axis) => size !== volume.dimensions[axis])) {
+    throw new Error('volumeNext must have the same dimensions as volume.');
   }
 }
 
@@ -112,6 +138,12 @@ export function validateStyle(props: VoxelLayerProps): void {
     bounds[2] > bounds[5]
   ) {
     throw new Error('clipBounds must be ordered normalized bounds within [0, 1].');
+  }
+
+  const blend = props.blend ?? 0;
+
+  if (!Number.isFinite(blend) || blend < 0 || blend > 1) {
+    throw new Error('blend must be between 0 and 1.');
   }
 
   assertPositiveFloat(props.stepSize ?? 0.5, 'stepSize');

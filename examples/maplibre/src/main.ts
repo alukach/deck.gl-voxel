@@ -4,7 +4,6 @@ import { Matrix4 } from '@math.gl/core';
 import { type VoxelData, VoxelLayer } from 'deck.gl-voxel';
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { blendFrames } from './blend.js';
 import { datasets } from './datasets.js';
 import { FrameCache } from './frame-cache.js';
 import { pickVolumeSample } from './volume-hover.js';
@@ -417,13 +416,17 @@ async function start(): Promise<void> {
   /**
    * Draws the frame with the current render settings.
    * @param volume - Grid values already placed in deck.gl's map coordinates.
+   * @param volumeNext - Grid to fade toward on the GPU, if any.
+   * @param blend - How far to fade from volume (0) to volumeNext (1).
    */
-  function drawFrame(volume: VoxelData): void {
+  function drawFrame(volume: VoxelData, volumeNext?: VoxelData, blend = 0): void {
     deck.setProps({
       layers: [
         new VoxelLayer({
           id: dataset.id,
           volume,
+          ...(volumeNext && { volumeNext }),
+          blend,
           modelMatrix,
           renderMode: modePicker.value === 'isosurface' ? 'isosurface' : 'volume',
           isovalue: isovalue.valueAsNumber,
@@ -441,18 +444,18 @@ async function start(): Promise<void> {
 
   /**
    * Cross-fades from the frame on screen to the next one over one playback step.
+   * The GPU does the blending, so each animation frame only changes the blend amount.
    * @param from - Frame currently drawn.
    * @param to - Frame to settle on.
    */
   function fadeTo(from: VoxelData, to: VoxelData): void {
     const duration = PLAYBACK_DELAY_MS / Number(speed.value);
-    const out = new Float32Array(to.values.length);
     const begin = performance.now();
 
     const step = (now: number): void => {
       const t = Math.min((now - begin) / duration, 1);
 
-      drawFrame(t < 1 ? blendFrames(from, to, t, out) : to);
+      drawFrame(t < 1 ? from : to, t < 1 ? to : undefined, t);
 
       if (t < 1) {
         tween = requestAnimationFrame(step);

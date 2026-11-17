@@ -5,6 +5,7 @@ import type { VoxelData, VoxelLayerProps } from './types.js';
 import {
   DEFAULT_MAX_TEXTURE_BYTES,
   DEFAULT_TRANSFER_FUNCTION,
+  validateNextVolume,
   validateStyle,
   validateVolume,
 } from './volume.js';
@@ -16,6 +17,8 @@ import {
 import {
   createVoxelResources,
   destroyVoxelResources,
+  promoteNextVolume,
+  updateNextVolume,
   updateTransferTexture,
   type VoxelResources,
 } from './voxel-resources.js';
@@ -126,6 +129,7 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
 
     const device = this.context.device;
     const transferFunction = props.transferFunction ?? DEFAULT_TRANSFER_FUNCTION;
+    const maxBytes = props.maxTextureBytes ?? DEFAULT_MAX_TEXTURE_BYTES;
 
     if (transferFunction.length / 4 > device.limits.maxTextureDimension2D) {
       throw new Error('Transfer function exceeds the device texture limit.');
@@ -134,15 +138,33 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
     validateVolume(
       props.volume,
       device.limits.maxTextureDimension3D,
-      props.maxTextureBytes ?? DEFAULT_MAX_TEXTURE_BYTES,
+      maxBytes,
       transferFunction.byteLength,
     );
+
+    if (props.volumeNext) {
+      validateNextVolume(
+        props.volume,
+        props.volumeNext,
+        device.limits.maxTextureDimension3D,
+        maxBytes,
+        transferFunction.byteLength,
+      );
+    }
+
+    if (props.volume === this.state.resources?.nextData) {
+      promoteNextVolume(this.state.resources);
+    }
 
     if (!this.state.resources || props.volume !== this.state.resources.volumeData) {
       this.releaseResources();
       this.setState({ resources: createVoxelResources(device, props, transferFunction) });
     } else if (transferFunction !== this.state.resources.transferData) {
       updateTransferTexture(device, this.state.resources, transferFunction, props.id);
+    }
+
+    if (this.state.resources) {
+      updateNextVolume(device, this.state.resources, props.volumeNext, props.id);
     }
 
     if (props.showBounds && !this.state.bounds) {
@@ -212,7 +234,10 @@ export class VoxelLayer extends Layer<VoxelLayerProps> {
     }
 
     resources.uniforms.write(uniforms.volume);
-    resources.model.setBindings({ sceneDepth: depth ?? resources.emptyDepth });
+    resources.model.setBindings({
+      sceneDepth: depth ?? resources.emptyDepth,
+      scalarsB: resources.next ?? resources.emptyNext,
+    });
     resources.model.draw(renderPass);
 
     if (bounds && uniforms.bounds) {

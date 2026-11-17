@@ -60,6 +60,21 @@ export type VoxelLayerProps = LayerProps & {
   volume: VoxelData;
 
   /**
+   * A second grid to fade toward, for smooth animation between time steps. It must have the
+   * same dimensions as `volume`. The GPU blends the two grids cell by cell, so changing
+   * `blend` costs a uniform write instead of a texture upload. A cell missing in either grid
+   * takes the value of the nearer grid. Pass this object as `volume` once the fade finishes
+   * and the layer reuses its texture.
+   */
+  volumeNext?: VoxelData;
+
+  /**
+   * How far to fade from `volume` (0) to `volumeNext` (1). Ignored without `volumeNext`.
+   * @default 0
+   */
+  blend?: number;
+
+  /**
    * For each pixel, the shader follows a line from the camera through the grid.
    * Volume blends the colors it finds along that line. Isosurface draws the first spot
    * where values cross the chosen threshold. Set Layer.opacity for the surface opacity.

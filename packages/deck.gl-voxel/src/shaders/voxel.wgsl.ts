@@ -27,6 +27,7 @@ struct VoxelUniforms {
   colorCoordinate: f32,
   renderMode: f32,
   isovalue: f32,
+  blend: f32,
   volumeToView: mat4x4f,
   normalToView: mat4x4f,
 };
@@ -35,6 +36,7 @@ struct VoxelUniforms {
 @group(0) @binding(1) var scalars: texture_3d<f32>;
 @group(0) @binding(2) var transfer: texture_2d<f32>;
 @group(0) @binding(3) var sceneDepth: texture_depth_2d;
+@group(0) @binding(4) var scalarsB: texture_3d<f32>;
 
 /**
  * Covers the whole view with one triangle. Each covered pixel runs fragmentMain,
@@ -100,14 +102,27 @@ fn intersectBox(origin: vec3f, direction: vec3f) -> vec2f {
 
 /**
  * Looks up a cell in the GPU texture by its integer [x, y, z] indices.
- * Indices just outside the grid use the nearest edge cell.
+ * Indices just outside the grid use the nearest edge cell. While fading to a second grid,
+ * a cell valid in both grids blends their values. A cell missing in either takes the nearer grid's cell.
  * @param index - Integer sample index, which may lie one cell outside an edge.
  * @returns The data value and a flag that is 1 for valid data or 0 for missing data.
  */
 fn loadScalar(index: vec3i) -> vec2f {
   let bounded = clamp(index, vec3i(0), vec3i(voxel.dimensions) - vec3i(1));
 
-  return textureLoad(scalars, bounded, 0).xy;
+  let a = textureLoad(scalars, bounded, 0).xy;
+
+  if (voxel.blend == 0.0) {
+    return a;
+  }
+
+  let b = textureLoad(scalarsB, bounded, 0).xy;
+
+  if (a.y > 0.5 && b.y > 0.5) {
+    return vec2f(mix(a.x, b.x, voxel.blend), 1.0);
+  }
+
+  return select(a, b, voxel.blend >= 0.5);
 }
 
 /**

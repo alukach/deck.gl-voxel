@@ -14,10 +14,19 @@ export interface VoxelResources {
   readonly uniforms: Buffer;
 
   /** GPU array indexed by [x, y, z]. Each cell has a float32 value and a valid-data flag. */
-  readonly volume: Texture;
+  volume: Texture;
 
   /** Reference to the caller's grid. A new object tells the layer to upload again. */
-  readonly volumeData: VoxelData;
+  volumeData: VoxelData;
+
+  /** Same layout as `volume`, holding the grid being faded toward. Absent when not blending. */
+  next: Texture | undefined;
+
+  /** Reference to the last volumeNext uploaded. */
+  nextData: VoxelData | undefined;
+
+  /** A one-cell stand-in for `next`, since the shader's slot must always hold a texture. */
+  readonly emptyNext: Texture;
 
   /** GPU copy of transferData. Each horizontal pixel holds one RGBA group. */
   transfer: Texture;
@@ -67,6 +76,18 @@ export function createVoxelResources(
 
     owned.push(transfer);
 
+    const emptyNext = device.createTexture({
+      id: `${props.id}-empty-next`,
+      dimension: '3d',
+      width: 1,
+      height: 1,
+      depth: 1,
+      format: 'rg32float',
+      usage: Texture.SAMPLE,
+    });
+
+    owned.push(emptyNext);
+
     const emptyDepth = device.createTexture({
       id: `${props.id}-empty-depth`,
       width: 1,
@@ -90,7 +111,13 @@ export function createVoxelResources(
       source: voxelShader,
       vertexCount: 3,
       topology: 'triangle-list',
-      bindings: { voxel: uniforms, scalars: volume, transfer, sceneDepth: emptyDepth },
+      bindings: {
+        voxel: uniforms,
+        scalars: volume,
+        transfer,
+        sceneDepth: emptyDepth,
+        scalarsB: emptyNext,
+      },
       shaderLayout: {
         attributes: [],
         bindings: [
@@ -105,6 +132,14 @@ export function createVoxelResources(
           },
           { name: 'transfer', type: 'texture', group: 0, location: 2, sampleType: 'float' },
           { name: 'sceneDepth', type: 'texture', group: 0, location: 3, sampleType: 'depth' },
+          {
+            name: 'scalarsB',
+            type: 'texture',
+            group: 0,
+            location: 4,
+            viewDimension: '3d',
+            sampleType: 'unfilterable-float',
+          },
         ],
       },
     });
@@ -114,6 +149,9 @@ export function createVoxelResources(
       uniforms,
       volume,
       volumeData: props.volume,
+      next: undefined,
+      nextData: undefined,
+      emptyNext,
       transfer,
       transferData: transferFunction,
       emptyDepth,
@@ -167,6 +205,79 @@ export function updateTransferTexture(
 }
 
 /**
+ * Makes the grid that was being faded toward the current one without uploading it again.
+ * Frees the previous grid's texture.
+ *
+ * @param resources - The layer's GPU objects, updated in place. `next` must be set.
+ */
+export function promoteNextVolume(resources: VoxelResources): void {
+  if (!resources.next || !resources.nextData) {
+    return;
+  }
+
+  resources.volume.destroy();
+  resources.volume = resources.next;
+  resources.volumeData = resources.nextData;
+  resources.next = undefined;
+  resources.nextData = undefined;
+  resources.model.setBindings({ scalars: resources.volume });
+}
+
+/**
+ * Uploads the grid to fade toward, or frees it when there isn't one. Overwrites the existing
+ * texture because both grids always have the same dimensions.
+ *
+ * @param device - Device owning the resources.
+ * @param resources - The layer's GPU objects, updated in place.
+ * @param next - Validated grid with the same dimensions as the current one, or undefined.
+ * @param id - Label for a newly created texture.
+ * @throws {Error} If texture allocation or upload fails.
+ */
+export function updateNextVolume(
+  device: Device,
+  resources: VoxelResources,
+  next: VoxelData | undefined,
+  id: string,
+): void {
+  if (next === resources.nextData) {
+    return;
+  }
+
+  if (!next) {
+    resources.next?.destroy();
+    resources.next = undefined;
+    resources.nextData = undefined;
+    return;
+  }
+
+  const [width, height, depth] = next.dimensions;
+  const texture =
+    resources.next ??
+    device.createTexture({
+      id: `${id}-scalars-next`,
+      dimension: '3d',
+      width,
+      height,
+      depth,
+      format: 'rg32float',
+      usage: Texture.SAMPLE | Texture.COPY_DST,
+    });
+
+  try {
+    texture.writeData(packVolume(next), { width, height, depthOrArrayLayers: depth });
+  } catch (error) {
+    if (texture !== resources.next) {
+      texture.destroy();
+    }
+
+    throw error;
+  }
+
+  resources.next = texture;
+  resources.nextData = next;
+}
+
+/**
  * Frees the GPU objects allocated for the layer. Callers still own their input arrays and depth.
  *
  * @param resources - Objects allocated by {@link createVoxelResources}.
@@ -175,6 +286,8 @@ export function destroyVoxelResources(resources: VoxelResources): void {
   resources.model.destroy();
   resources.uniforms.destroy();
   resources.volume.destroy();
+  resources.next?.destroy();
+  resources.emptyNext.destroy();
   resources.transfer.destroy();
   resources.emptyDepth.destroy();
 }

@@ -19,6 +19,7 @@ const OFFSETS = {
   valueRange: 36,
   stepSize: 40,
   renderMode: 44,
+  blend: 46,
   volumeToView: 48,
   normalToView: 64,
 } as const;
@@ -143,6 +144,8 @@ export function createVoxelUniforms(
     [RENDER_MODES[props.renderMode ?? 'volume'], props.isovalue ?? 0.5],
     OFFSETS.renderMode,
   );
+
+  values[OFFSETS.blend] = props.volumeNext ? (props.blend ?? 0) : 0;
 
   if (!values.every(Number.isFinite) || (bounds && !bounds.every(Number.isFinite))) {
     throw new Error('Voxel camera and style uniforms must be representable as float32.');
