@@ -166,7 +166,7 @@ async function start(): Promise<void> {
 
     if (!enabled) {
       window.clearTimeout(playbackTimer);
-      cancelAnimationFrame(tween ?? 0);
+      stopFade(true);
       startingPlayback = false;
 
       if (panel.dataset.state === 'buffering') {
@@ -443,6 +443,24 @@ async function start(): Promise<void> {
   }
 
   /**
+   * Stops a running cross-fade. Pausing leaves the layer part-way between two frames,
+   * so it settles on the current frame instead.
+   * @param settle - Whether to redraw the current frame without a blend.
+   */
+  function stopFade(settle: boolean): void {
+    if (tween === undefined) {
+      return;
+    }
+
+    cancelAnimationFrame(tween);
+    tween = undefined;
+
+    if (settle && frame) {
+      drawFrame(frame);
+    }
+  }
+
+  /**
    * Cross-fades from the frame on screen to the next one over one playback step.
    * The GPU does the blending, so each animation frame only changes the blend amount.
    * @param from - Frame currently drawn.
@@ -457,9 +475,7 @@ async function start(): Promise<void> {
 
       drawFrame(t < 1 ? from : to, t < 1 ? to : undefined, t);
 
-      if (t < 1) {
-        tween = requestAnimationFrame(step);
-      }
+      tween = t < 1 ? requestAnimationFrame(step) : undefined;
     };
 
     tween = requestAnimationFrame(step);
@@ -493,9 +509,13 @@ async function start(): Promise<void> {
       const volume = await cache.read(index, signal);
 
       signal.throwIfAborted();
-      cancelAnimationFrame(tween ?? 0);
+      stopFade(false);
 
-      if (smooth.checked && playing && frame && frame.values.length === volume.values.length) {
+      if (
+        smooth.checked &&
+        playing &&
+        frame?.dimensions.every((size, axis) => size === volume.dimensions[axis])
+      ) {
         fadeTo(frame, volume);
       } else {
         drawFrame(volume);
@@ -523,7 +543,8 @@ async function start(): Promise<void> {
 
   /** Applies changes to the render controls to the displayed frame. */
   function redraw(): void {
-    if (frame) {
+    // A running fade redraws with the new settings on its next animation frame.
+    if (frame && tween === undefined) {
       drawFrame(frame);
     }
   }

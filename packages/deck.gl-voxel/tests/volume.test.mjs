@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { packVolume, validateStyle, validateVolume } from '../dist/volume.js';
+import { packVolume, validateNextVolume, validateStyle, validateVolume } from '../dist/volume.js';
 
 const grid = {
   values: new Float32Array([1, Number.NaN, -9999, Infinity]),
@@ -29,4 +29,28 @@ test('invalid sampling and transfer-function inputs fail explicitly', () => {
   assert.throws(() => validateStyle({ valueRange: [1, 1] }), /valueRange/);
   assert.throws(() => validateStyle({ transferFunction: new Uint8Array(7) }), /RGBA8/);
   assert.throws(() => validateStyle({ clipBounds: [0.8, 0, 0, 0.2, 1, 1] }), /clipBounds/);
+});
+
+test('a volume to fade toward must match the current grid and fit in memory twice', () => {
+  const next = { ...grid, values: new Float32Array(4) };
+
+  assert.doesNotThrow(() => validateNextVolume(grid, next, 2048, 1024, 8));
+  assert.throws(
+    () =>
+      validateNextVolume(
+        grid,
+        { values: new Float32Array(4), dimensions: [4, 1, 1] },
+        2048,
+        1024,
+        8,
+      ),
+    /same dimensions/,
+  );
+  assert.throws(() => validateNextVolume(grid, next, 2048, 60, 8), /require/);
+});
+
+test('blend must be a number from 0 to 1', () => {
+  assert.doesNotThrow(() => validateStyle({ blend: 0.5 }));
+  assert.throws(() => validateStyle({ blend: 1.5 }), /blend/);
+  assert.throws(() => validateStyle({ blend: Number.NaN }), /blend/);
 });
