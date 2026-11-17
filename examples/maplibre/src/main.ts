@@ -453,7 +453,7 @@ async function start(): Promise<void> {
     const begin = performance.now();
 
     const step = (now: number): void => {
-      const t = Math.min((now - begin) / duration, 1);
+      const t = Math.min(Math.max((now - begin) / duration, 0), 1);
 
       drawFrame(t < 1 ? from : to, t < 1 ? to : undefined, t);
 
