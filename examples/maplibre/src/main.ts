@@ -4,6 +4,7 @@ import { Matrix4 } from '@math.gl/core';
 import { type VoxelData, VoxelLayer } from 'deck.gl-voxel';
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import { blendFrames } from './blend.js';
 import { datasets } from './datasets.js';
 import { FrameCache } from './frame-cache.js';
 import { pickVolumeSample } from './volume-hover.js';
@@ -88,6 +89,7 @@ async function start(): Promise<void> {
   const slider = getElement('hour', HTMLInputElement);
   const play = getElement('play', HTMLButtonElement);
   const speed = getElement('speed', HTMLSelectElement);
+  const smooth = getElement('smooth', HTMLInputElement);
   const density = getElement('density', HTMLInputElement);
   const densityValue = getElement('density-value', HTMLOutputElement);
   const exaggeration = getElement('exaggeration', HTMLInputElement);
@@ -140,6 +142,7 @@ async function start(): Promise<void> {
   let frame: VoxelData | undefined;
   let playing = false;
   let playbackTimer: number | undefined;
+  let tween: number | undefined;
 
   /**
    * Combines a request's cancellation, the page lifetime and a network timeout.
@@ -164,6 +167,7 @@ async function start(): Promise<void> {
 
     if (!enabled) {
       window.clearTimeout(playbackTimer);
+      cancelAnimationFrame(tween ?? 0);
       startingPlayback = false;
 
       if (panel.dataset.state === 'buffering') {
@@ -436,6 +440,29 @@ async function start(): Promise<void> {
   }
 
   /**
+   * Cross-fades from the frame on screen to the next one over one playback step.
+   * @param from - Frame currently drawn.
+   * @param to - Frame to settle on.
+   */
+  function fadeTo(from: VoxelData, to: VoxelData): void {
+    const duration = PLAYBACK_DELAY_MS / Number(speed.value);
+    const out = new Float32Array(to.values.length);
+    const begin = performance.now();
+
+    const step = (now: number): void => {
+      const t = Math.min((now - begin) / duration, 1);
+
+      drawFrame(t < 1 ? blendFrames(from, to, t, out) : to);
+
+      if (t < 1) {
+        tween = requestAnimationFrame(step);
+      }
+    };
+
+    tween = requestAnimationFrame(step);
+  }
+
+  /**
    * Fetches the selected hour and replaces the visible volume when it arrives.
    * @param index - Zero-based time index in the active store.
    */
@@ -463,7 +490,14 @@ async function start(): Promise<void> {
       const volume = await cache.read(index, signal);
 
       signal.throwIfAborted();
-      drawFrame(volume);
+      cancelAnimationFrame(tween ?? 0);
+
+      if (smooth.checked && playing && frame && frame.values.length === volume.values.length) {
+        fadeTo(frame, volume);
+      } else {
+        drawFrame(volume);
+      }
+
       frame = volume;
       slider.disabled = false;
       play.disabled = cache.frameCount < 2;
