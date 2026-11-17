@@ -61,7 +61,8 @@ export type VoxelLayerProps = LayerProps & {
 
   /**
    * A second grid to fade toward, for smooth animation between time steps. It must have the
-   * same dimensions as `volume`. The GPU blends the two grids cell by cell, so changing
+   * same dimensions as `volume`, and only dimensions are compared: it uses `volume`'s origin and
+   * spacing. The GPU blends the two grids cell by cell, so changing
    * `blend` costs a uniform write instead of a texture upload. A cell missing in either grid
    * takes the value of the nearer grid. Pass this object as `volume` once the fade finishes
    * and the layer reuses its texture.

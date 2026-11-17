@@ -140,7 +140,7 @@ export function validateStyle(props: VoxelLayerProps): void {
     throw new Error('clipBounds must be ordered normalized bounds within [0, 1].');
   }
 
-  const blend = props.blend ?? 0;
+  const blend = props.volumeNext ? (props.blend ?? 0) : 0;
 
   if (!Number.isFinite(blend) || blend < 0 || blend > 1) {
     throw new Error('blend must be between 0 and 1.');

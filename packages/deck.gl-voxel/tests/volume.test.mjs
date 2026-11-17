@@ -51,6 +51,7 @@ test('a volume to fade toward must match the current grid and fit in memory twic
 
 test('blend must be a number from 0 to 1', () => {
   assert.doesNotThrow(() => validateStyle({ blend: 0.5 }));
-  assert.throws(() => validateStyle({ blend: 1.5 }), /blend/);
-  assert.throws(() => validateStyle({ blend: Number.NaN }), /blend/);
+  assert.doesNotThrow(() => validateStyle({ blend: 2 }));
+  assert.throws(() => validateStyle({ blend: 1.5, volumeNext: grid }), /blend/);
+  assert.throws(() => validateStyle({ blend: Number.NaN, volumeNext: grid }), /blend/);
 });
